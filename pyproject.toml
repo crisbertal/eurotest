@@ -8,10 +8,12 @@ packages = [{include = "eurotest", from = "src"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
-quart = "^0.19.4"
+uvicorn = {extras = ["standard"], version = "^0.27.1"}
+fastapi = "^0.109.2"
+python-multipart = "^0.0.9"
 
 [tool.poetry.scripts]
-start = "eurotest:run"
+start = "eurotest.main:run"
 
 [build-system]
 requires = ["poetry-core"]
