@@ -19,17 +19,6 @@ app = FastAPI()
 # OAuth2 token 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
-# TODO
-# - [x] Que varios usuarios se puedan conectar a un canal
-# - [ ] Login de usuario (http)
-# - [ ] Solo se puede acceder a la web si se esta logueado
-# - [ ] Agregar votos a la base de datos
-# - [ ] Reconocer quien es el usuario admin del resto
-# - [ ] Admin tiene diferentes funcionales que el resto
-# - [ ] Admin pueda cambiar la actuacion y se refleje en el lobby
-# - [ ] Los votos van a la actuacion correspondiente
-# - [ ] Panel de ranking que se actualice por http
-
 
 # REQUIREMENTS
 # 1. Votar la actuacion (post, con confirmacion)

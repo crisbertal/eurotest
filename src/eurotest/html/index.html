@@ -6,8 +6,23 @@
 		<title>Eurovision App</title>
 	</head>
 	<body>
-		<h1>Index html</h1>
-		<p>Hello world</p>
+		<h1>Usuario</h1>
+		<label for="user-input">Nombre de usuario</label>
+		<input type="text" name="user-input" id="user-input">
+		<button onclick="login()">Login</button>
+		<hr>
+		<h1>Votar</h1>
+		<label for="performance-input">Actuacion</label>
+		<input type="text" name="performance-input" id="performance-input" value="5">
+		<label for="meme-input">Meme</label>
+		<input type="text" name="meme-input" id="meme-input" value="5">
+		<button onclick="vote()">Login</button>
+		<hr>
+		<h1>Ranking</h1>
+		<h3>Actuacion: 5</h3>
+		<h3>Meme: 5</h3>
+		<button onclick="refresh_ranking()">Recargar</button>
+
 		<script src="../scripts/index.js"></script>
 	</body>
 </html>
