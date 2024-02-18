@@ -1,11 +1,23 @@
 from typing import Annotated
 import uvicorn
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Form
-from fastapi.responses import FileResponse
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    Form,
+    Depends,
+    HTTPException,
+)
+from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from .database import *
 
 app = FastAPI()
+
+# OAuth2 token 
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 # TODO
 # - [x] Que varios usuarios se puedan conectar a un canal
@@ -14,7 +26,7 @@ app = FastAPI()
 # - [ ] Agregar votos a la base de datos
 # - [ ] Reconocer quien es el usuario admin del resto
 # - [ ] Admin tiene diferentes funcionales que el resto
-# - [ ] Admin pueda cambiar la actuacion y se refleje en el lobby 
+# - [ ] Admin pueda cambiar la actuacion y se refleje en el lobby
 # - [ ] Los votos van a la actuacion correspondiente
 # - [ ] Panel de ranking que se actualice por http
 
@@ -26,22 +38,22 @@ app = FastAPI()
 # 4. Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 
 
-@app.get("/")
-async def index() -> FileResponse: 
-    return FileResponse("html/index.html")
+@app.post("/register/")
+def register(username: Annotated[str, Form()], password: Annotated[str, Form()], db: Session = Depends(get_db)):
+    db_user = create_user(db, username, password)
+    return {"username": db_user.username, "id": db_user.id}
 
 
-# must be a form with input names equals as the parameters here
 @app.post("/login/")
-async def login(username: Annotated[str, Form()], password: Annotated[str, Form()]): ...
-
-
-@app.get("/next-country")
-async def get_next_country(): ...
+def login(username: Annotated[str, Form()], password: Annotated[str, Form()], db: Session = Depends(get_db)):
+    if authenticate_user(db, username, password):
+        return {"message": "Login successful"}
+    raise HTTPException(status_code=400, detail="Incorrect username or password")
 
 
 @app.post("/{country}/vote/")
-async def vote(country: str): ...
+async def vote(country: str, token: Annotated[str, Depends(oauth2_scheme)]):
+    return {"country": country, "token": token}
 
 
 @app.get("/ranking")
