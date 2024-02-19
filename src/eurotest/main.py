@@ -1,16 +1,43 @@
-import uvicorn
+from enum import Enum
 
+import uvicorn
 from fastapi import (
     FastAPI,
     WebSocket,
     WebSocketDisconnect,
 )
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 
-from enum import Enum
-import json
+
+
+# Global data
+users = []
+countries = {
+        "españa": {"performance": 0, "meme": 0, "vote_count": 0},
+        "francia": {"performance": 0, "meme": 0, "vote_count": 0},
+        "alemania": {"performance": 0, "meme": 0, "vote_count": 0},
+}
 
 app = FastAPI()
+
+# avoid CORS error
+origins = [
+    "file:///home/crisber/Projects/eurotest/src/eurotest/html/index.html",
+    "https://localhost.tiangolo.com",
+    "http://localhost",
+    "http://localhost:8080",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 # REQUIREMENTS
 # 1. Votar la actuacion (post, con confirmacion)
@@ -18,17 +45,17 @@ app = FastAPI()
 # 3. Cambiar pais actual: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
 # 4. Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 
+
 class Events(Enum):
-	CONNECTION = "connect"
-	UPDATE_USER_LIST = "update-user-list"
+    CONNECTION = "connect"
+    UPDATE_USER_LIST = "update-user-list"
 
 
-@app.post("/{country}/vote/")
-async def vote(country: str): ...
-
-
-@app.get("/ranking")
-async def get_ranking(): ...
+class Vote(BaseModel):
+    username: str
+    country: str
+    performance: int
+    meme: int
 
 
 class ConnectionManager:
@@ -52,8 +79,31 @@ class ConnectionManager:
 
 manager = ConnectionManager()
 
-# Global data
-users = []
+
+@app.post("/vote/")
+async def vote(vote: Vote): 
+    # TODO use the database
+    countries[vote.country]["performance"] += vote.performance
+    countries[vote.country]["meme"] += vote.meme
+    countries[vote.country]["vote_count"] += 1
+
+    # change user vote state (already voted)
+    for user in users:
+        if user.name == vote.username:
+            user.vote = True
+            break
+
+    # broadcast the connection to all users in the lobby
+    # REFACTOR: duplicate function in websocket endpoint
+    await manager.broadcast(
+        {"type": Events.UPDATE_USER_LIST.value, "message": users}
+    )
+
+    return vote
+
+
+@app.get("/ranking")
+async def get_ranking(): ...
 
 
 @app.websocket("/ws")
@@ -71,8 +121,9 @@ async def websocket_endpoint(websocket: WebSocket):
                     users.append(message)
 
                     # broadcast the connection to all users in the lobby
-                    await manager.broadcast({"type": Events.UPDATE_USER_LIST.value, 
-                                                 "message": users})
+                    await manager.broadcast(
+                        {"type": Events.UPDATE_USER_LIST.value, "message": users}
+                    )
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
