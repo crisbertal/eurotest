@@ -1,24 +1,16 @@
-from typing import Annotated
 import uvicorn
 
 from fastapi import (
     FastAPI,
     WebSocket,
     WebSocketDisconnect,
-    Form,
-    Depends,
-    HTTPException,
 )
-from fastapi.security import OAuth2PasswordBearer
-from pydantic import BaseModel
-from sqlalchemy.orm import Session
-from .database import *
+
+
+from enum import Enum
+import json
 
 app = FastAPI()
-
-# OAuth2 token 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
 
 # REQUIREMENTS
 # 1. Votar la actuacion (post, con confirmacion)
@@ -26,23 +18,13 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 # 3. Cambiar pais actual: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
 # 4. Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 
-
-@app.post("/register/")
-def register(username: Annotated[str, Form()], password: Annotated[str, Form()], db: Session = Depends(get_db)):
-    db_user = create_user(db, username, password)
-    return {"username": db_user.username, "id": db_user.id}
-
-
-@app.post("/login/")
-def login(username: Annotated[str, Form()], password: Annotated[str, Form()], db: Session = Depends(get_db)):
-    if authenticate_user(db, username, password):
-        return {"message": "Login successful"}
-    raise HTTPException(status_code=400, detail="Incorrect username or password")
+class Events(Enum):
+	CONNECTION = "connect"
+	UPDATE_USER_LIST = "update-user-list"
 
 
 @app.post("/{country}/vote/")
-async def vote(country: str, token: Annotated[str, Depends(oauth2_scheme)]):
-    return {"country": country, "token": token}
+async def vote(country: str): ...
 
 
 @app.get("/ranking")
@@ -60,25 +42,38 @@ class ConnectionManager:
     def disconnect(self, websocket: WebSocket):
         self.active_connections.remove(websocket)
 
-    async def send_personal_message(self, message: str, websocket: WebSocket):
-        await websocket.send_text(message)
+    async def send_personal_message(self, message, websocket: WebSocket):
+        await websocket.send_json(message)
 
-    async def broadcast(self, message: str):
+    async def broadcast(self, message):
         for connection in self.active_connections:
-            await connection.send_text(message)
+            await connection.send_json(message)
 
 
 manager = ConnectionManager()
 
+# Global data
+users = []
 
-@app.websocket("/ws/{client_id}")
-async def websocket_endpoint(websocket: WebSocket, client_id: str):
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
     # el client_id que sirva para recuperar los datos de la BD
     await manager.connect(websocket)
     try:
         while True:
-            data = await websocket.receive_text()
-            ...
+            data = await websocket.receive_json()
+            datatype = data["type"]
+            message = data["message"]
+            match datatype:
+                case Events.CONNECTION.value:
+                    # TODO do this with the database
+                    users.append(message)
+
+                    # broadcast the connection to all users in the lobby
+                    await manager.broadcast({"type": Events.UPDATE_USER_LIST.value, 
+                                                 "message": users})
+
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         # lo que se hace cuando se desconecta el usuario
