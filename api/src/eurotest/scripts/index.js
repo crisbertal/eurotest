@@ -1,15 +1,11 @@
 // TODO 
 // - [ ] Create scripts by domain
-// - [ ] Serve HTML and JS with http-server or something like that with NodeJS
 
+// globals
 const Events = {
 	CONNECTION: "connect",
 	UPDATE_USER_LIST: "update-user-list",
-};
-
-// Global State
-let user = {};
-let country = "es";
+}
 
 // components
 // buttons
@@ -35,13 +31,7 @@ loginButton.addEventListener("click", () => {
 	// TODO 
 	// - [ ] Can't be empty
 	// - [ ] Try catch this boi or get errors from the websocket connection
-
-	user = {
-		name: userInput.value,
-		vote: false,
-	};
-
-	connectSocket(user);
+	connectSocket(userInput.value);
 
 	// Update the user connected
 	userP.innerText = userInput.value
@@ -52,40 +42,13 @@ loginButton.addEventListener("click", () => {
 	userInput.disbled = true;
 });
 
-
-voteButton.addEventListener("click", () => {
-	// TODO for the current country
-	fetch("http://localhost:5000/vote", {
-		method: "POST",
-		mode: "cors",
-		// REFACTOR all in the body or change endpoint /{country}/vote/
-		body: JSON.stringify({
-			username: user.name,
-			country: "es",
-			performance: parseInt(performanceInput.value),
-			meme: parseInt(memeInput.value)
-		}),
-		headers: {
-			"Content-type": "application/json; charset=UTF-8"
-		}
-		// TODO If OK, update connected-users-list to know who voted
-	}).then((response) => console.log(response.json()));
-});
-
-
 // functions
-const connectSocket = () => {
+const connectSocket = (userName) => {
 	const ws = new WebSocket("ws://localhost:5000/ws");
 
 	// notify admin to add to active users list
 	ws.onopen = () => {
-		const message = {
-			type: Events.CONNECTION,
-			message: {
-				user: user
-			}
-		}
-		ws.send(JSON.stringify(message));
+	  ws.send(JSON.stringify({type: Events.CONNECTION, message: userName}));
 	}
 
 	ws.onmessage = ({ data }) => {
@@ -94,23 +57,21 @@ const connectSocket = () => {
 		message = jsonData.message
 
 		switch (datatype) {
-			// on user connected to the lobby
 			case Events.UPDATE_USER_LIST: 
 				// REFACTOR only append the new user, not all the users connected
 				connectedUsersList.innerHTML = "";
-				console.log(message);
-				message.forEach((userConnected) => {
-					const userElement = document.createElement("li");
-					const color = userConnected.user.vote ? "green" : "red";
-					userElement.style.color = color;
-					userElement.textContent = userConnected.user.name;
-					connectedUsersList.appendChild(userElement);
+				message.forEach((userName) => {
+						const user = document.createElement("li");
+						user.textContent = userName;
+						connectedUsersList.appendChild(user);
 				});
 		}
 
 	}
 
 }
+
+const vote = () => {}
 
 const refreshRanking = () => {}
 
