@@ -61,6 +61,7 @@ voteButton.addEventListener("click", () => {
 		// REFACTOR all in the body or change endpoint /{country}/vote/
 		body: JSON.stringify({
 			username: user.name,
+			// TODO: country_id must be the id for the current country
 			country: "es",
 			performance: parseInt(performanceInput.value),
 			meme: parseInt(memeInput.value)
@@ -69,7 +70,28 @@ voteButton.addEventListener("click", () => {
 			"Content-type": "application/json; charset=UTF-8"
 		}
 		// TODO If OK, update connected-users-list to know who voted
-	}).then((response) => console.log(response.json()));
+	}).then((response) => { 
+		console.log(response.json());
+	});
+});
+
+
+refreshRankingButton.addEventListener("click", async () => {
+	response = await fetch("http://localhost:5000/ranking", {
+		method: "GET",
+		headers: {
+			"Content-type": "application/json; charset=UTF-8"
+		}
+	});
+
+	ranking = await response.json();
+	rankingList.innerHTML = "";
+	// only get countries with vote counts from back
+	ranking.forEach((score) => {
+		const rankingElement = document.createElement("li");
+		rankingElement.textContent = score.country + ": Performance: " + score.mean_performance + " | Meme: " + score.mean_meme;
+		rankingList.appendChild(rankingElement);
+	});
 });
 
 
@@ -97,7 +119,6 @@ const connectSocket = () => {
 				// REFACTOR only append the new user, not all the users connected
 				connectedUsersList.innerHTML = "";
 				message.forEach((userConnected) => {
-					console.log(userConnected);
 					const userElement = document.createElement("li");
 					const color = userConnected.vote ? "green" : "red";
 					userElement.style.color = color;

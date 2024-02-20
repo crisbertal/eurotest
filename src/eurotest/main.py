@@ -1,3 +1,6 @@
+# REFACTOR
+# - [ ] make different apps for API and Static
+
 import os
 from enum import Enum
 
@@ -26,11 +29,23 @@ class Vote(BaseModel):
     meme: int
 
 
+class Country(BaseModel):
+    performance: int
+    meme: int
+    vote_count: int
+
+
+class CountryRanking(BaseModel):
+    country: str
+    mean_performance: float
+    mean_meme: float
+
+
 users = []
 countries = {
-        "es": {"performance": 0, "meme": 0, "vote_count": 0},
-        "fr": {"performance": 0, "meme": 0, "vote_count": 0},
-        "de": {"performance": 0, "meme": 0, "vote_count": 0},
+    "es": Country(performance=0, meme=0, vote_count=0),
+    "fr": Country(performance=0, meme=0, vote_count=0),
+    "de": Country(performance=0, meme=0, vote_count=0),
 }
 
 app = FastAPI()
@@ -52,15 +67,15 @@ app.add_middleware(
 
 # resolve error by relative paths
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-static_dir = os.path.join(BASE_DIR, 'static')
+static_dir = os.path.join(BASE_DIR, "static")
 app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static")
 
 
 # REQUIREMENTS
-# 1. Votar la actuacion (post, con confirmacion)
-# 2. Ver ranking (get, posibilidad de refescar)
-# 3. Cambiar pais actual: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
-# 4. Login: user, pass. En principio creamos nosotros los usuarios desde admin.
+# - [x] Votar la actuacion (post, con confirmacion)
+# - [x] Ver ranking (get, posibilidad de refescar)
+# - [ ] Cambiar pais actual: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
+# - [ ] Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 
 
 class ConnectionManager:
@@ -91,11 +106,11 @@ def index():
 
 
 @app.post("/vote/")
-async def vote(vote: Vote): 
+async def vote(vote: Vote) -> Vote:
     # TODO use the database
-    countries[vote.country]["performance"] += vote.performance
-    countries[vote.country]["meme"] += vote.meme
-    countries[vote.country]["vote_count"] += 1
+    countries[vote.country].performance += vote.performance
+    countries[vote.country].meme += vote.meme
+    countries[vote.country].vote_count += 1
 
     # change user vote state (already voted)
     for user in users:
@@ -113,7 +128,24 @@ async def vote(vote: Vote):
 
 
 @app.get("/ranking")
-async def get_ranking(): ...
+async def get_ranking() -> list[CountryRanking]:
+    # TODO use the database
+    # TODO only get those countries that have been played or playing
+    result = []
+    for name, country in countries.items():
+        # if the country has no votes
+        if country.vote_count == 0:
+            break
+        mean_performance = country.performance / country.vote_count
+        mean_meme = country.meme / country.vote_count
+        result.append(
+            CountryRanking(
+                country=name,
+                mean_performance=mean_performance,
+                mean_meme=mean_meme,
+            )
+        )
+    return result
 
 
 @app.websocket("/ws")
