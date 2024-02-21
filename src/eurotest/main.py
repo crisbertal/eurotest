@@ -32,7 +32,6 @@ class User(BaseModel):
 
 class Vote(BaseModel):
     username: str
-    country: str
     performance: int
     meme: int
 
@@ -55,6 +54,10 @@ countries: list[Country] = [
     Country(name="es", performance=0, meme=0, vote_count=0),
     Country(name="fr", performance=0, meme=0, vote_count=0),
     Country(name="de", performance=0, meme=0, vote_count=0),
+    Country(name="be", performance=0, meme=0, vote_count=0),
+    Country(name="po", performance=0, meme=0, vote_count=0),
+    Country(name="en", performance=0, meme=0, vote_count=0),
+    Country(name="ru", performance=0, meme=0, vote_count=0),
 ]
 # increment this value to get to the next country
 current_country: int = 0
@@ -227,6 +230,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         {"type": Events.UPDATE_USER_LIST.value, "message": users_json}
                     )
                 case Events.NEXT_COUNTRY.value:
+                    global current_country
                     await send_next_country(current_country)
 
     except WebSocketDisconnect:
