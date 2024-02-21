@@ -65,8 +65,6 @@ voteButton.addEventListener("click", () => {
 		// REFACTOR all in the body or change endpoint /{country}/vote/
 		body: JSON.stringify({
 			username: user.name,
-			// TODO, get current country from the backend
-			country: "es",
 			performance: parseInt(performanceInput.value),
 			meme: parseInt(memeInput.value)
 		}),
