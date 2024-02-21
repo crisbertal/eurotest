@@ -152,31 +152,34 @@ async def vote(vote: Vote) -> Vote:
             vote_count += 1
 
     if vote_count == len(users) and len(users) > 1:
-        # reset vote values for all users
-        for user in users:
-            user.vote = False
-
-        # broadcast to update user list again
-        users_json = json.dumps([user.model_dump() for user in users])
-        await manager.broadcast(
-            {
-                "type": Events.UPDATE_USER_LIST.value,
-                "message": users_json,
-            }
-        )
-
-        # update current_country value
-        current_country += 1
-        # broadcast to change to next country
-        await manager.broadcast(
-            {
-                "type": Events.NEXT_COUNTRY.value,
-                "message": countries[current_country].model_dump_json(),
-            }
-        )
-
+        await send_next_country(current_country)
 
     return vote
+
+
+async def send_next_country(current_country):
+    # reset vote values for all users
+    for user in users:
+        user.vote = False
+
+    # broadcast to update user list again
+    users_json = json.dumps([user.model_dump() for user in users])
+    await manager.broadcast(
+        {
+            "type": Events.UPDATE_USER_LIST.value,
+            "message": users_json,
+        }
+    )
+
+    # update current_country value
+    current_country += 1
+    # broadcast to change to next country
+    await manager.broadcast(
+        {
+            "type": Events.NEXT_COUNTRY.value,
+            "message": countries[current_country].model_dump_json(),
+        }
+    )
 
 
 @app.get("/ranking")
@@ -224,8 +227,7 @@ async def websocket_endpoint(websocket: WebSocket):
                         {"type": Events.UPDATE_USER_LIST.value, "message": users_json}
                     )
                 case Events.NEXT_COUNTRY.value:
-                    # TODO next country from the client
-                    pass
+                    await send_next_country(current_country)
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

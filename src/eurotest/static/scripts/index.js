@@ -11,12 +11,14 @@ const Events = {
 // Global State
 let user = {};
 let country = "es";
+let ws_connection;
 
 // components
 // buttons
 const loginButton = document.getElementById("login-button");
 const voteButton = document.getElementById("vote-button");
 const refreshRankingButton = document.getElementById("refresh-ranking-button");
+const nextCountryButton = document.getElementById("next-country-button");
 
 // inputs
 const userInput = document.getElementById("user-input");
@@ -94,9 +96,21 @@ refreshRankingButton.addEventListener("click", async () => {
 });
 
 
+nextCountryButton.addEventListener("click", () => {
+	// TODO dont make this button visible if theres no websocket connection
+	ws_connection.send(JSON.stringify({
+		"type": Events.NEXT_COUNTRY,
+		// only need the type
+		"message": ""
+	}));
+});
+
+
 // functions
 const connectSocket = () => {
 	const ws = new WebSocket("ws://localhost:5000/ws");
+	// REFACTOR, use the same ws object, not ws_connection
+	ws_connection = ws;
 
 	// notify admin to add to active users list
 	ws.onopen = () => {
