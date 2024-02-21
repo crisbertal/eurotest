@@ -35,15 +35,37 @@ const userP = document.getElementById("user-p");
 
 
 // events
-loginButton.addEventListener("click", () => {
+loginButton.addEventListener("click", async () => {
 	// TODO 
 	// - [ ] Can't be empty
 	// - [ ] Try catch this boi or get errors from the websocket connection
+	//
 
 	user = {
 		name: userInput.value,
 		vote: false,
 	};
+
+	// REFACTOR try catch all fetch bois
+	response = await fetch("http://localhost:5000/login", {
+		method: "POST",
+		mode: "cors",
+		body: JSON.stringify(user),
+		headers: {
+			"Content-type": "application/json; charset=UTF-8"
+		}
+	});
+
+	// TODO client need to get error messages 
+	if (response.status !== 200) {
+		console.error("Error");
+		console.error(response);
+	}
+
+	body = await response.json();
+
+	user = body.user;
+	country = body.country;
 
 	connectSocket(user);
 
@@ -54,11 +76,13 @@ loginButton.addEventListener("click", () => {
 	userInput.value = "";
 	loginButton.disabled = true;
 	userInput.disbled = true;
+
+	// Add current country label
+	currentCountryTitle.innerHTML = `Pais actual: ${country}`;
 });
 
 
 voteButton.addEventListener("click", () => {
-	// TODO for the current country
 	fetch("http://localhost:5000/vote", {
 		method: "POST",
 		mode: "cors",

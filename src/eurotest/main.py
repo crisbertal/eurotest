@@ -30,6 +30,11 @@ class User(BaseModel):
     vote: bool
 
 
+class LoginResponse(BaseModel):
+    user: User 
+    current_countr: str
+
+
 class Vote(BaseModel):
     username: str
     performance: int
@@ -47,20 +52,6 @@ class CountryRanking(BaseModel):
     country: str
     mean_performance: float
     mean_meme: float
-
-
-users: list[User] = []
-countries: list[Country] = [
-    Country(name="es", performance=0, meme=0, vote_count=0),
-    Country(name="fr", performance=0, meme=0, vote_count=0),
-    Country(name="de", performance=0, meme=0, vote_count=0),
-    Country(name="be", performance=0, meme=0, vote_count=0),
-    Country(name="po", performance=0, meme=0, vote_count=0),
-    Country(name="en", performance=0, meme=0, vote_count=0),
-    Country(name="ru", performance=0, meme=0, vote_count=0),
-]
-# increment this value to get to the next country
-current_country: int = 0
 
 
 app = FastAPI()
@@ -90,9 +81,36 @@ app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static"
 # - [x] Votar la actuacion (post, con confirmacion)
 # - [x] Ver ranking (get, posibilidad de refescar)
 # - [x] Cambiar pais actual automatico: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
-# - [ ] Cambiar pais actual por el admin
+# - [x] Cambiar pais actual por el admin
 # - [ ] Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 # - [ ] Comportamiento en la desconexion de usuario
+
+
+class StateManager:
+    users: list[User] = []
+    countries: list[Country] = [
+        Country(name="es", performance=0, meme=0, vote_count=0),
+        Country(name="fr", performance=0, meme=0, vote_count=0),
+        Country(name="de", performance=0, meme=0, vote_count=0),
+        Country(name="be", performance=0, meme=0, vote_count=0),
+        Country(name="po", performance=0, meme=0, vote_count=0),
+        Country(name="en", performance=0, meme=0, vote_count=0),
+        Country(name="ru", performance=0, meme=0, vote_count=0),
+    ]
+    # increment this value to get to the next country
+    _current_country: int = 0
+
+    def get_current_country(self) -> Country:
+        return self.countries[self._current_country]
+
+    def set_next_country(self): 
+        self._current_country += 1
+
+    def set_user_vote(self, name: str):
+        for user in self.users:
+            if user.name == name:
+                user.vote = True
+                break
 
 
 class ConnectionManager:
@@ -114,6 +132,7 @@ class ConnectionManager:
             await connection.send_json(message)
 
 
+state = StateManager()
 manager = ConnectionManager()
 
 
@@ -122,25 +141,30 @@ def index():
     return RedirectResponse(url="/static/html/index.html")
 
 
+@app.post("/login/",)
+async def login(user: User) -> dict:
+    # TODO do the comprobation with DB of the login credentials
+    # return user and current country
+    return {"user": user, "country": state.get_current_country().name}
+
+
 @app.post("/vote/")
 async def vote(vote: Vote) -> Vote:
     # using global to avoid the "current_country is unbound"
-    global current_country
+    # global current_country
+    current_country = state.get_current_country()
 
     # todo use the database
-    countries[current_country].performance += vote.performance
-    countries[current_country].meme += vote.meme
-    countries[current_country].vote_count += 1
+    current_country.performance += vote.performance
+    current_country.meme += vote.meme
+    current_country.vote_count += 1
 
     # change user vote state (already voted)
-    for user in users:
-        if user.name == vote.username:
-            user.vote = True
-            break
+    state.set_user_vote(vote.username)
 
     # broadcast the connection to all users in the lobby
     # refactor: this message is duplicated in the ws endpoint
-    users_json = json.dumps([user.model_dump() for user in users])
+    users_json = json.dumps([user.model_dump() for user in state.users])
     await manager.broadcast(
         {
             "type": Events.UPDATE_USER_LIST.value,
@@ -150,23 +174,24 @@ async def vote(vote: Vote) -> Vote:
 
     # all users have voted, change performance to next country
     vote_count = 0
-    for user in users:
+    for user in state.users:
         if user.vote:
             vote_count += 1
 
-    if vote_count == len(users) and len(users) > 1:
-        await send_next_country(current_country)
+    if vote_count == len(state.users) and len(state.users) > 1:
+        await send_next_country()
+        pass
 
     return vote
 
 
-async def send_next_country(current_country):
+async def send_next_country():
     # reset vote values for all users
-    for user in users:
+    for user in state.users:
         user.vote = False
 
     # broadcast to update user list again
-    users_json = json.dumps([user.model_dump() for user in users])
+    users_json = json.dumps([user.model_dump() for user in state.users])
     await manager.broadcast(
         {
             "type": Events.UPDATE_USER_LIST.value,
@@ -175,12 +200,12 @@ async def send_next_country(current_country):
     )
 
     # update current_country value
-    current_country += 1
+    state.set_next_country()
     # broadcast to change to next country
     await manager.broadcast(
         {
             "type": Events.NEXT_COUNTRY.value,
-            "message": countries[current_country].model_dump_json(),
+            "message": state.get_current_country().model_dump_json(),
         }
     )
 
@@ -190,7 +215,7 @@ async def get_ranking() -> list[CountryRanking]:
     # TODO use the database
     # TODO only get those countries that have been played or playing
     result = []
-    for country in countries:
+    for country in state.countries:
         # if the country has no votes
         if country.vote_count == 0:
             break
@@ -220,18 +245,18 @@ async def websocket_endpoint(websocket: WebSocket):
                 case Events.CONNECTION.value:
                     user = User(name=message["name"], vote=message["vote"])
                     # TODO do this with the database
-                    users.append(user)
+                    state.users.append(user)
 
                     # broadcast the connection to all users in the lobby
                     users_json = json.dumps(
-                        [user.model_dump() for user in users]
+                        [user.model_dump() for user in state.users]
                     )
                     await manager.broadcast(
                         {"type": Events.UPDATE_USER_LIST.value, "message": users_json}
                     )
                 case Events.NEXT_COUNTRY.value:
-                    global current_country
-                    await send_next_country(current_country)
+                    # global current_country
+                    await send_next_country()
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)
