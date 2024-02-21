@@ -1,8 +1,10 @@
 # REFACTOR
 # - [ ] make different apps for API and Static
+# - [ ] logging all request for server log
 
 import os
 from enum import Enum
+import json
 
 import uvicorn
 from fastapi import (
@@ -20,6 +22,12 @@ from pydantic import BaseModel
 class Events(Enum):
     CONNECTION = "connect"
     UPDATE_USER_LIST = "update-user-list"
+    NEXT_COUNTRY = "next-country"
+
+
+class User(BaseModel):
+    name: str
+    vote: bool
 
 
 class Vote(BaseModel):
@@ -30,6 +38,7 @@ class Vote(BaseModel):
 
 
 class Country(BaseModel):
+    name: str
     performance: int
     meme: int
     vote_count: int
@@ -41,12 +50,15 @@ class CountryRanking(BaseModel):
     mean_meme: float
 
 
-users = []
-countries = {
-    "es": Country(performance=0, meme=0, vote_count=0),
-    "fr": Country(performance=0, meme=0, vote_count=0),
-    "de": Country(performance=0, meme=0, vote_count=0),
-}
+users: list[User] = []
+countries: list[Country] = [
+    Country(name="es", performance=0, meme=0, vote_count=0),
+    Country(name="fr", performance=0, meme=0, vote_count=0),
+    Country(name="de", performance=0, meme=0, vote_count=0),
+]
+# increment this value to get to the next country
+current_country: int = 0
+
 
 app = FastAPI()
 
@@ -74,8 +86,10 @@ app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static"
 # REQUIREMENTS
 # - [x] Votar la actuacion (post, con confirmacion)
 # - [x] Ver ranking (get, posibilidad de refescar)
-# - [ ] Cambiar pais actual: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
+# - [x] Cambiar pais actual automatico: que se cambie TODO no sabemos los paises todavia, que sea facil agregar nuevos
+# - [ ] Cambiar pais actual por el admin
 # - [ ] Login: user, pass. En principio creamos nosotros los usuarios desde admin.
+# - [ ] Comportamiento en la desconexion de usuario
 
 
 class ConnectionManager:
@@ -107,22 +121,60 @@ def index():
 
 @app.post("/vote/")
 async def vote(vote: Vote) -> Vote:
-    # TODO use the database
-    countries[vote.country].performance += vote.performance
-    countries[vote.country].meme += vote.meme
-    countries[vote.country].vote_count += 1
+    # using global to avoid the "current_country is unbound"
+    global current_country
+
+    # todo use the database
+    countries[current_country].performance += vote.performance
+    countries[current_country].meme += vote.meme
+    countries[current_country].vote_count += 1
 
     # change user vote state (already voted)
     for user in users:
-        if user["name"] == vote.username:
-            user["vote"] = True
+        if user.name == vote.username:
+            user.vote = True
             break
 
     # broadcast the connection to all users in the lobby
-    # REFACTOR: duplicate function in websocket endpoint
+    # refactor: this message is duplicated in the ws endpoint
+    users_json = json.dumps([user.model_dump() for user in users])
     await manager.broadcast(
-        {"type": Events.UPDATE_USER_LIST.value, "message": users}
+        {
+            "type": Events.UPDATE_USER_LIST.value,
+            "message": users_json,
+        }
     )
+
+    # all users have voted, change performance to next country
+    vote_count = 0
+    for user in users:
+        if user.vote:
+            vote_count += 1
+
+    if vote_count == len(users) and len(users) > 1:
+        # reset vote values for all users
+        for user in users:
+            user.vote = False
+
+        # broadcast to update user list again
+        users_json = json.dumps([user.model_dump() for user in users])
+        await manager.broadcast(
+            {
+                "type": Events.UPDATE_USER_LIST.value,
+                "message": users_json,
+            }
+        )
+
+        # update current_country value
+        current_country += 1
+        # broadcast to change to next country
+        await manager.broadcast(
+            {
+                "type": Events.NEXT_COUNTRY.value,
+                "message": countries[current_country].model_dump_json(),
+            }
+        )
+
 
     return vote
 
@@ -132,7 +184,7 @@ async def get_ranking() -> list[CountryRanking]:
     # TODO use the database
     # TODO only get those countries that have been played or playing
     result = []
-    for name, country in countries.items():
+    for country in countries:
         # if the country has no votes
         if country.vote_count == 0:
             break
@@ -140,7 +192,7 @@ async def get_ranking() -> list[CountryRanking]:
         mean_meme = country.meme / country.vote_count
         result.append(
             CountryRanking(
-                country=name,
+                country=country.name,
                 mean_performance=mean_performance,
                 mean_meme=mean_meme,
             )
@@ -154,19 +206,26 @@ async def websocket_endpoint(websocket: WebSocket):
     await manager.connect(websocket)
     try:
         while True:
+            # client messages
             data = await websocket.receive_json()
             datatype = data["type"]
             message = data["message"]
             match datatype:
                 case Events.CONNECTION.value:
-                    user = message
+                    user = User(name=message["name"], vote=message["vote"])
                     # TODO do this with the database
                     users.append(user)
 
                     # broadcast the connection to all users in the lobby
-                    await manager.broadcast(
-                        {"type": Events.UPDATE_USER_LIST.value, "message": users}
+                    users_json = json.dumps(
+                        [user.model_dump() for user in users]
                     )
+                    await manager.broadcast(
+                        {"type": Events.UPDATE_USER_LIST.value, "message": users_json}
+                    )
+                case Events.NEXT_COUNTRY.value:
+                    # TODO next country from the client
+                    pass
 
     except WebSocketDisconnect:
         manager.disconnect(websocket)

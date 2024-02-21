@@ -5,6 +5,7 @@
 const Events = {
 	CONNECTION: "connect",
 	UPDATE_USER_LIST: "update-user-list",
+    NEXT_COUNTRY: "next-country",
 };
 
 // Global State
@@ -27,6 +28,7 @@ const rankingList = document.getElementById("ranking-list");
 const connectedUsersList = document.getElementById("connected-users-list");
 
 // text
+const currentCountryTitle = document.getElementById("current-country");
 const userP = document.getElementById("user-p");
 
 
@@ -61,7 +63,7 @@ voteButton.addEventListener("click", () => {
 		// REFACTOR all in the body or change endpoint /{country}/vote/
 		body: JSON.stringify({
 			username: user.name,
-			// TODO: country_id must be the id for the current country
+			// TODO, get current country from the backend
 			country: "es",
 			performance: parseInt(performanceInput.value),
 			meme: parseInt(memeInput.value)
@@ -69,9 +71,6 @@ voteButton.addEventListener("click", () => {
 		headers: {
 			"Content-type": "application/json; charset=UTF-8"
 		}
-		// TODO If OK, update connected-users-list to know who voted
-	}).then((response) => { 
-		console.log(response.json());
 	});
 });
 
@@ -89,7 +88,7 @@ refreshRankingButton.addEventListener("click", async () => {
 	// only get countries with vote counts from back
 	ranking.forEach((score) => {
 		const rankingElement = document.createElement("li");
-		rankingElement.textContent = score.country + ": Performance: " + score.mean_performance + " | Meme: " + score.mean_meme;
+		rankingElement.textContent = `${score.country}: Performance: ${score.mean_performance} | Meme: ${score.mean_meme}`
 		rankingList.appendChild(rankingElement);
 	});
 });
@@ -108,10 +107,12 @@ const connectSocket = () => {
 		ws.send(JSON.stringify(message));
 	}
 
-	ws.onmessage = ({ data }) => {
-		jsonData = JSON.parse(data);
-		datatype = jsonData.type
-		message = jsonData.message
+	ws.onmessage = async ({ data }) => {
+		jsonData = await JSON.parse(data);
+		datatype = jsonData.type;
+		// REFACTOR esto es un poco mierda... Como que al pasar serializado el
+		// mensaje en el websocket, hay que volver a parsearlo aqui
+		message = await JSON.parse(jsonData.message);
 
 		switch (datatype) {
 			// on user connected to the lobby
@@ -125,6 +126,9 @@ const connectSocket = () => {
 					userElement.textContent = userConnected.name;
 					connectedUsersList.appendChild(userElement);
 				});
+				break;
+			case Events.NEXT_COUNTRY:
+				currentCountryTitle.innerHTML = `Pais actual: ${message.name}`;
 		}
 
 	}
