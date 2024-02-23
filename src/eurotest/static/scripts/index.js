@@ -1,6 +1,9 @@
-// TODO 
+// REQUIREMENTS 
+// - [ ] Admin buttons only visible for admin users
+// - [ ] Cooldown for next_country button after clicked
+
+// REFACTOR
 // - [ ] Create scripts by domain
-// - [ ] Serve HTML and JS with http-server or something like that with NodeJS
 
 const Events = {
 	CONNECTION: "connect",
@@ -171,4 +174,3 @@ const connectSocket = () => {
 
 }
 
-const refreshRanking = () => {}

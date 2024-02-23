@@ -31,7 +31,7 @@ class User(BaseModel):
 
 
 class LoginResponse(BaseModel):
-    user: User 
+    user: User
     current_countr: str
 
 
@@ -84,6 +84,7 @@ app.mount("/static", StaticFiles(directory=static_dir, html=True), name="static"
 # - [x] Cambiar pais actual por el admin
 # - [ ] Login: user, pass. En principio creamos nosotros los usuarios desde admin.
 # - [ ] Comportamiento en la desconexion de usuario
+# - [ ] Mover el state a BD
 
 
 class StateManager:
@@ -97,14 +98,17 @@ class StateManager:
         Country(name="en", performance=0, meme=0, vote_count=0),
         Country(name="ru", performance=0, meme=0, vote_count=0),
     ]
-    # increment this value to get to the next country
+    # increment this value to get the next country
     _current_country: int = 0
+
 
     def get_current_country(self) -> Country:
         return self.countries[self._current_country]
 
-    def set_next_country(self): 
+
+    def set_next_country(self):
         self._current_country += 1
+
 
     def set_user_vote(self, name: str):
         for user in self.users:
@@ -141,7 +145,7 @@ def index():
     return RedirectResponse(url="/static/html/index.html")
 
 
-@app.post("/login/",)
+@app.post("/login/")
 async def login(user: User) -> dict:
     # TODO do the comprobation with DB of the login credentials
     # return user and current country
@@ -248,9 +252,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     state.users.append(user)
 
                     # broadcast the connection to all users in the lobby
-                    users_json = json.dumps(
-                        [user.model_dump() for user in state.users]
-                    )
+                    users_json = json.dumps([user.model_dump() for user in state.users])
                     await manager.broadcast(
                         {"type": Events.UPDATE_USER_LIST.value, "message": users_json}
                     )
